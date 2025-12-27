@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Category {
+  id           String     @id @default(uuid())
+  name         String
+  displayOrder Int        @default(0) @map("display_order")
+  isActive     Boolean    @default(true) @map("is_active")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  menuItems    MenuItem[]
+
+  @@map("categories")
+}
+
+model MenuItem {
+  id              String      @id @default(uuid())
+  categoryId      String      @map("category_id")
+  name            String
+  description     String?
+  basePrice       Decimal     @map("base_price") @db.Decimal(10, 2)
+  imageUrl        String?     @map("image_url")
+  preparationTime Int?        @map("preparation_time")
+  isAvailable     Boolean     @default(true) @map("is_available")
+  dietaryTags     Json?       @map("dietary_tags")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  category        Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems      OrderItem[]
+
+  @@index([categoryId])
+  @@index([isAvailable])
+  @@map("menu_items")
+}
+
+model Order {
+  id                  String               @id @default(uuid())
+  sessionId           String               @map("session_id")
+  customerName        String?              @map("customer_name")
+  customerEmail       String?              @map("customer_email")
+  customerPhone       String?              @map("customer_phone")
+  status              String               @default("received")
+  subtotal            Decimal              @db.Decimal(10, 2)
+  tax                 Decimal              @db.Decimal(10, 2)
+  total               Decimal              @db.Decimal(10, 2)
+  paymentStatus       String               @default("pending") @map("payment_status")
+  paymentMethod       String?              @map("payment_method")
+  specialInstructions String?              @map("special_instructions")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  items               OrderItem[]
+  statusHistory       OrderStatusHistory[]
+  payments            Payment[]
+
+  @@index([sessionId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("orders")
+}
+
+model OrderItem {
+  id                  String   @id @default(uuid())
+  orderId             String   @map("order_id")
+  menuItemId          String   @map("menu_item_id")
+  menuItemName        String   @map("menu_item_name")
+  quantity            Int
+  basePrice           Decimal  @map("base_price") @db.Decimal(10, 2)
+  customizations      Json?
+  itemTotal           Decimal  @map("item_total") @db.Decimal(10, 2)
+  specialInstructions String?  @map("special_instructions")
+  createdAt           DateTime @default(now()) @map("created_at")
+  order               Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem            MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id        String   @id @default(uuid())
+  orderId   String   @map("order_id")
+  status    String
+  changedBy String?  @map("changed_by")
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt(sort: Desc)])
+  @@map("order_status_history")
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  orderId       String   @map("order_id")
+  amount        Decimal  @db.Decimal(10, 2)
+  paymentMethod String   @map("payment_method")
+  status        String
+  transactionId String?  @map("transaction_id")
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
+  @@map("payments")
+}

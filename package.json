@@ -3,14 +3,13 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "build": "nest build",
-    "start": "node dist/main",
-    "dev": "nest start --watch"
+    "build": "prisma generate --config ./prisma.config.ts && nest build",
+    "start": "prisma migrate deploy --config ./prisma.config.ts && node dist/main",
+    "dev": "nest start --watch",
+    "prisma:generate": "prisma generate --config ./prisma.config.ts",
+    "prisma:migrate": "prisma migrate dev --config ./prisma.config.ts",
+    "prisma:studio": "prisma studio --config ./prisma.config.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
     "@nestjs/common": "^10.0.0",
     "@nestjs/core": "^10.0.0",

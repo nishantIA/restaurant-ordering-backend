@@ -1,6 +1,3 @@
-// Restaurant Ordering System - Complete Database Schema
-// Hybrid Model: Relational + DAG for complex customizations
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,45 +6,339 @@ datasource db {
   provider = "postgresql"
 }
 
-// ============================================================================
-// ENUMS
-// ============================================================================
+model User {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  phone     String?  @unique @db.VarChar(20)
+  email     String?  @unique @db.VarChar(255)
+  name      String?  @db.VarChar(100)
+  role      UserRole @default(CUSTOMER)
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([phone])
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model Category {
+  name             String     @db.VarChar(100)
+  createdAt        DateTime   @default(now())
+  description      String?
+  displayOrder     Int        @default(0)
+  imageUrl         String?    @db.VarChar(500)
+  isActive         Boolean    @default(true)
+  parentCategoryId String?    @db.Uuid
+  slug             String     @unique @db.VarChar(100)
+  updatedAt        DateTime   @updatedAt
+  id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  parentCategory   Category?  @relation("CategoryHierarchy", fields: [parentCategoryId], references: [id])
+  childCategories  Category[] @relation("CategoryHierarchy")
+  menuItems        MenuItem[]
+
+  @@index([parentCategoryId])
+  @@index([isActive])
+  @@map("categories")
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model MenuItem {
+  name               String                  @db.VarChar(200)
+  description        String?
+  allergens          String[]
+  availableQuantity  Decimal?                @db.Decimal(10, 3)
+  basePrice          Decimal                 @db.Decimal(10, 2)
+  categoryId         String                  @db.Uuid
+  createdAt          DateTime                @default(now())
+  customizationType  CustomizationType       @default(NONE)
+  dietaryTags        String[]
+  imageUrl           String?                 @db.VarChar(500)
+  isAvailable        Boolean                 @default(true)
+  maxQuantity        Decimal?                @db.Decimal(10, 3)
+  minQuantity        Decimal                 @default(1.000) @db.Decimal(10, 3)
+  prepTime           Int?
+  quantityType       QuantityType            @default(UNIT)
+  slug               String                  @unique @db.VarChar(200)
+  stepQuantity       Decimal                 @default(1.000) @db.Decimal(10, 3)
+  unit               String?                 @db.VarChar(20)
+  updatedAt          DateTime                @updatedAt
+  id                 String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customizationNodes CustomizationNode[]
+  customizations     MenuItemCustomization[]
+  taxes              MenuItemTax[]
+  category           Category                @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems         OrderItem[]
+
+  @@index([categoryId])
+  @@index([isAvailable])
+  @@index([basePrice])
+  @@index([slug])
+  @@index([categoryId, isAvailable, basePrice])
+  @@index([dietaryTags], type: Gin)
+  @@index([allergens], type: Gin)
+  @@index([description(ops: raw("gin_trgm_ops"))], map: "idx_menu_items_description_trgm", type: Gin)
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "idx_menu_items_name_trgm", type: Gin)
+  @@map("menu_items")
+}
+
+model Tax {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String        @db.VarChar(100)
+  type         TaxType
+  value        Decimal       @db.Decimal(10, 4)
+  isActive     Boolean       @default(true)
+  isInclusive  Boolean       @default(false)
+  displayOrder Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  menuItems    MenuItemTax[]
+  orderTaxes   OrderTax[]
+
+  @@index([isActive])
+  @@map("taxes")
+}
+
+model MenuItemTax {
+  menuItemId String   @db.Uuid
+  taxId      String   @db.Uuid
+  applyOrder Int      @default(0)
+  createdAt  DateTime @default(now())
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  tax        Tax      @relation(fields: [taxId], references: [id], onDelete: Cascade)
+
+  @@id([menuItemId, taxId])
+  @@index([menuItemId])
+  @@map("menu_item_taxes")
+}
+
+model Customization {
+  id        String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String                  @db.VarChar(100)
+  type      SimpleCustomizationType
+  price     Decimal                 @default(0.00) @db.Decimal(10, 2)
+  isActive  Boolean                 @default(true)
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+  menuItems MenuItemCustomization[]
+
+  @@index([type])
+  @@index([isActive])
+  @@map("customizations")
+}
+
+model MenuItemCustomization {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  menuItemId      String        @db.Uuid
+  customizationId String        @db.Uuid
+  isRequired      Boolean       @default(false)
+  minSelections   Int           @default(0)
+  maxSelections   Int           @default(1)
+  displayOrder    Int           @default(0)
+  createdAt       DateTime      @default(now())
+  customization   Customization @relation(fields: [customizationId], references: [id], onDelete: Cascade)
+  menuItem        MenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@unique([menuItemId, customizationId])
+  @@index([menuItemId])
+  @@map("menu_item_customizations")
+}
+
+model CustomizationNode {
+  id                      String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  menuItemId              String                   @db.Uuid
+  type                    NodeType
+  name                    String                   @db.VarChar(100)
+  description             String?
+  price                   Decimal                  @default(0.00) @db.Decimal(10, 2)
+  data                    Json?
+  displayOrder            Int                      @default(0)
+  isActive                Boolean                  @default(true)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  childEdges              CustomizationEdge[]      @relation("ChildNode")
+  parentEdges             CustomizationEdge[]      @relation("ParentNode")
+  menuItem                MenuItem                 @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  orderItemCustomizations OrderItemCustomization[]
+
+  @@index([menuItemId])
+  @@index([type])
+  @@index([isActive])
+  @@map("customization_nodes")
+}
+
+model CustomizationEdge {
+  id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  parentNodeId String            @db.Uuid
+  childNodeId  String            @db.Uuid
+  edgeType     EdgeType          @default(HAS_OPTION)
+  constraints  Json?
+  displayOrder Int               @default(0)
+  createdAt    DateTime          @default(now())
+  childNode    CustomizationNode @relation("ChildNode", fields: [childNodeId], references: [id], onDelete: Cascade)
+  parentNode   CustomizationNode @relation("ParentNode", fields: [parentNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([parentNodeId, childNodeId])
+  @@index([parentNodeId])
+  @@index([childNodeId])
+  @@map("customization_edges")
+}
+
+model Order {
+  userId  String? @db.Uuid
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)  
+  subtotal            Decimal              @db.Decimal(10, 2)
+  createdAt           DateTime             @default(now())
+  estimatedPrepTime   Int?
+  orderNumber         String               @unique @db.VarChar(50)
+  sessionId           String               @db.VarChar(255)
+  specialInstructions String?
+  taxAmount           Decimal              @default(0.00) @db.Decimal(10, 2)
+  totalAmount         Decimal              @db.Decimal(10, 2)
+  updatedAt           DateTime             @updatedAt
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  status              OrderStatus          @default(RECEIVED)
+  items               OrderItem[]
+  statusHistory       OrderStatusHistory[]
+  taxes               OrderTax[]
+  payment             Payment?
+
+  @@index([sessionId])
+  @@index([userId])
+  @@index([status])
+  @@index([orderNumber])
+  @@index([createdAt])
+  @@index([createdAt(sort: Desc)], map: "idx_orders_created")
+  @@index([sessionId, status], map: "idx_orders_session_status")
+  @@map("orders")
+}
+
+model OrderItem {
+  quantity            Decimal                  @db.Decimal(10, 3)
+  createdAt           DateTime                 @default(now())
+  customizationTotal  Decimal                  @default(0.00) @db.Decimal(10, 2)
+  itemBasePrice       Decimal                  @db.Decimal(10, 2)
+  itemName            String                   @db.VarChar(200)
+  itemSubtotal        Decimal                  @db.Decimal(10, 2)
+  itemTaxAmount       Decimal                  @default(0.00) @db.Decimal(10, 2)
+  itemTotal           Decimal                  @db.Decimal(10, 2)
+  menuItemId          String                   @db.Uuid
+  orderId             String                   @db.Uuid
+  prepTime            Int?
+  quantityType        QuantityType
+  specialInstructions String?
+  unit                String?                  @db.VarChar(20)
+  id                  String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customizations      OrderItemCustomization[]
+  menuItem            MenuItem                 @relation(fields: [menuItemId], references: [id])
+  order               Order                    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([menuItemId, createdAt(sort: Desc)], map: "idx_order_items_analytics")
+  @@index([menuItemId], map: "idx_order_items_menu_item")
+  @@index([orderId], map: "idx_order_items_order")
+  @@map("order_items")
+}
+
+model OrderItemCustomization {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderItemId         String             @db.Uuid
+  customizationName   String             @db.VarChar(100)
+  customizationType   String             @db.VarChar(20)
+  customizationPrice  Decimal            @db.Decimal(10, 2)
+  customizationNodeId String?            @db.Uuid
+  createdAt           DateTime           @default(now())
+  customizationNode   CustomizationNode? @relation(fields: [customizationNodeId], references: [id])
+  orderItem           OrderItem          @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@index([orderItemId])
+  @@map("order_item_customizations")
+}
+
+model OrderTax {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId          String   @db.Uuid
+  taxId            String   @db.Uuid
+  taxName          String   @db.VarChar(100)
+  taxType          TaxType
+  taxValue         Decimal  @db.Decimal(10, 4)
+  calculatedAmount Decimal  @db.Decimal(10, 2)
+  createdAt        DateTime @default(now())
+  order            Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tax              Tax      @relation(fields: [taxId], references: [id])
+
+  @@index([orderId])
+  @@map("order_taxes")
+}
+
+model OrderStatusHistory {
+  notes     String?
+  changedBy String?     @db.VarChar(100)
+  createdAt DateTime    @default(now())
+  orderId   String      @db.Uuid
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  status    OrderStatus
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)], map: "idx_order_status_history_created")
+  @@index([orderId, createdAt(sort: Desc)], map: "idx_order_status_history_order_created")
+  @@map("order_status_history")
+}
+
+model Payment {
+  amount          Decimal       @db.Decimal(10, 2)
+  createdAt       DateTime      @default(now())
+  gatewayResponse Json?
+  orderId         String        @unique @db.Uuid
+  paymentMethod   String        @db.VarChar(50)
+  transactionId   String?       @unique @db.VarChar(100)
+  updatedAt       DateTime      @updatedAt
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  status          PaymentStatus @default(PENDING)
+  order           Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([transactionId])
+  @@map("payments")
+}
 
 enum QuantityType {
-  UNIT      // pieces, items
-  WEIGHT    // kg, gram
-  VOLUME    // liter, ml
-  SERVING   // bowl, plate, cup
+  UNIT
+  WEIGHT
+  VOLUME
+  SERVING
 }
 
 enum CustomizationType {
-  NONE          // no customization
-  SIMPLE        // basic add-ons, sizes
-  COMPLEX_DAG   // build-your-own with DAG
+  NONE
+  SIMPLE
+  COMPLEX_DAG
 }
 
 enum SimpleCustomizationType {
-  SIZE      // Small, Medium, Large
-  ADDON     // Extra Cheese, Bacon
-  MODIFIER  // Spicy, No Onions
-  OPTION    // Choice options
+  SIZE
+  ADDON
+  MODIFIER
+  OPTION
 }
 
 enum TaxType {
-  PERCENTAGE  // 10% 
-  FIXED       // $2.50 service charge
+  PERCENTAGE
+  FIXED
 }
 
 enum NodeType {
-  GROUP     // Grouping node (e.g., "Toppings")
-  OPTION    // Selectable option (e.g., "Pepperoni")
-  MODIFIER  // Modifier option
+  GROUP
+  OPTION
+  MODIFIER
 }
 
 enum EdgeType {
-  HAS_OPTION  // Parent has this option
-  REQUIRES    // Requires another option
-  EXCLUDES    // Mutually exclusive
+  HAS_OPTION
+  REQUIRES
+  EXCLUDES
 }
 
 enum OrderStatus {
@@ -65,389 +356,8 @@ enum PaymentStatus {
   REFUNDED
 }
 
-// ============================================================================
-// MENU STRUCTURE
-// ============================================================================
-
-model Category {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name            String    @db.VarChar(100)
-  slug            String    @unique @db.VarChar(100)
-  description     String?   @db.Text
-  imageUrl        String?   @db.VarChar(500)
-  displayOrder    Int       @default(0)
-  isActive        Boolean   @default(true)
-  
-  // Self-referential for hierarchy
-  parentCategoryId String?  @db.Uuid
-  parentCategory   Category? @relation("CategoryHierarchy", fields: [parentCategoryId], references: [id], onDelete: SetNull)
-  childCategories  Category[] @relation("CategoryHierarchy")
-  
-  // Relations
-  menuItems       MenuItem[]
-  
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@index([parentCategoryId])
-  @@index([isActive])
-  @@map("categories")
+enum UserRole {
+  CUSTOMER
+  KITCHEN_STAFF
+  ADMIN
 }
-
-model MenuItem {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  categoryId      String    @db.Uuid
-  
-  // Basic Info
-  name            String    @db.VarChar(200)
-  slug            String    @unique @db.VarChar(200)
-  description     String?   @db.Text
-  imageUrl        String?   @db.VarChar(500)
-  
-  // Pricing
-  basePrice       Decimal   @db.Decimal(10, 2)
-  
-  // Quantity/Unit Management
-  quantityType    QuantityType @default(UNIT)
-  unit            String?   @db.VarChar(20) // piece, kg, gram, liter, ml, bowl, plate
-  minQuantity     Decimal   @default(1.000) @db.Decimal(10, 3)
-  maxQuantity     Decimal?  @db.Decimal(10, 3) // NULL = unlimited
-  stepQuantity    Decimal   @default(1.000) @db.Decimal(10, 3) // increment step
-  
-  // Inventory
-  isAvailable     Boolean   @default(true)
-  availableQuantity Decimal? @db.Decimal(10, 3) // NULL = unlimited, number = stock tracking
-  
-  // Metadata
-  prepTime        Int?      // in minutes
-  dietaryTags     String[]  // ['vegetarian', 'vegan', 'gluten-free', 'spicy']
-  allergens       String[]  // ['nuts', 'dairy', 'shellfish', 'eggs']
-  
-  // Customization Type
-  customizationType CustomizationType @default(NONE)
-  
-  // Relations
-  category        Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  taxes           MenuItemTax[]
-  customizations  MenuItemCustomization[]
-  customizationNodes CustomizationNode[]
-  orderItems      OrderItem[]
-  
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@index([categoryId])
-  @@index([isAvailable])
-  @@index([basePrice])
-  @@index([slug])
-  // Composite index for common filter combinations
-  @@index([categoryId, isAvailable, basePrice])
-  // GIN index for array columns (for filtering by dietary tags, allergens)
-  @@index([dietaryTags], type: Gin)
-  @@index([allergens], type: Gin)
-  // Note: Full-text search index on name needs to be added via migration (see migration file)
-  @@map("menu_items")
-}
-
-// ============================================================================
-// TAX MANAGEMENT
-// ============================================================================
-
-model Tax {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name            String    @db.VarChar(100) // GST, VAT, Service Charge
-  type            TaxType
-  value           Decimal   @db.Decimal(10, 4) // 18.0000 for 18%, 2.5000 for $2.50
-  isActive        Boolean   @default(true)
-  isInclusive     Boolean   @default(false) // true = included in price, false = added on top
-  displayOrder    Int       @default(0)
-  
-  // Relations
-  menuItems       MenuItemTax[]
-  orderTaxes      OrderTax[]
-  
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@index([isActive])
-  @@map("taxes")
-}
-
-model MenuItemTax {
-  menuItemId      String    @db.Uuid
-  taxId           String    @db.Uuid
-  applyOrder      Int       @default(0) // for cascading taxes
-  
-  menuItem        MenuItem  @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-  tax             Tax       @relation(fields: [taxId], references: [id], onDelete: Cascade)
-  
-  createdAt       DateTime  @default(now())
-
-  @@id([menuItemId, taxId])
-  @@index([menuItemId])
-  @@map("menu_item_taxes")
-}
-
-// ============================================================================
-// SIMPLE CUSTOMIZATIONS (Relational - for most items)
-// ============================================================================
-
-model Customization {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name            String    @db.VarChar(100)
-  type            SimpleCustomizationType
-  price           Decimal   @default(0.00) @db.Decimal(10, 2)
-  isActive        Boolean   @default(true)
-  
-  // Relations
-  menuItems       MenuItemCustomization[]
-  
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@index([type])
-  @@index([isActive])
-  @@map("customizations")
-}
-
-model MenuItemCustomization {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  menuItemId      String    @db.Uuid
-  customizationId String    @db.Uuid
-  
-  // Constraints
-  isRequired      Boolean   @default(false)
-  minSelections   Int       @default(0)
-  maxSelections   Int       @default(1)
-  displayOrder    Int       @default(0)
-  
-  // Relations
-  menuItem        MenuItem  @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-  customization   Customization @relation(fields: [customizationId], references: [id], onDelete: Cascade)
-  
-  createdAt       DateTime  @default(now())
-
-  @@unique([menuItemId, customizationId])
-  @@index([menuItemId])
-  @@map("menu_item_customizations")
-}
-
-// ============================================================================
-// COMPLEX CUSTOMIZATIONS (DAG - for build-your-own items)
-// ============================================================================
-
-model CustomizationNode {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  menuItemId      String    @db.Uuid
-  
-  // Node Info
-  type            NodeType
-  name            String    @db.VarChar(100)
-  description     String?   @db.Text
-  price           Decimal   @default(0.00) @db.Decimal(10, 2)
-  
-  // Metadata
-  data            Json?     // flexible additional data
-  displayOrder    Int       @default(0)
-  isActive        Boolean   @default(true)
-  
-  // Relations
-  menuItem        MenuItem  @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-  parentEdges     CustomizationEdge[] @relation("ParentNode")
-  childEdges      CustomizationEdge[] @relation("ChildNode")
-  orderItemCustomizations OrderItemCustomization[]
-  
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@index([menuItemId])
-  @@index([type])
-  @@index([isActive])
-  @@map("customization_nodes")
-}
-
-model CustomizationEdge {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  parentNodeId    String    @db.Uuid
-  childNodeId     String    @db.Uuid
-  
-  // Edge Type
-  edgeType        EdgeType  @default(HAS_OPTION)
-  
-  // Constraints as JSONB: { "min": 1, "max": 3, "required": true, "default": "nodeId" }
-  constraints     Json?
-  displayOrder    Int       @default(0)
-  
-  // Relations
-  parentNode      CustomizationNode @relation("ParentNode", fields: [parentNodeId], references: [id], onDelete: Cascade)
-  childNode       CustomizationNode @relation("ChildNode", fields: [childNodeId], references: [id], onDelete: Cascade)
-  
-  createdAt       DateTime  @default(now())
-
-  @@unique([parentNodeId, childNodeId])
-  @@index([parentNodeId])
-  @@index([childNodeId])
-  @@map("customization_edges")
-}
-
-// ============================================================================
-// ORDER MANAGEMENT
-// ============================================================================
-
-model Order {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  sessionId       String    @db.VarChar(255) // for anonymous users
-  
-  // Order Info
-  orderNumber     String    @unique @db.VarChar(50) // ORD-20241227-001
-  status          OrderStatus @default(RECEIVED)
-  
-  // Pricing (calculated at order time)
-  subtotal        Decimal   @db.Decimal(10, 2)
-  taxAmount       Decimal   @default(0.00) @db.Decimal(10, 2)
-  totalAmount     Decimal   @db.Decimal(10, 2)
-  
-  // Metadata
-  specialInstructions String? @db.Text
-  estimatedPrepTime Int?    // total prep time in minutes
-  
-  // Relations
-  items           OrderItem[]
-  taxes           OrderTax[]
-  statusHistory   OrderStatusHistory[]
-  payment         Payment?
-  
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@index([sessionId])
-  @@index([status])
-  @@index([orderNumber])
-  @@index([createdAt])
-  @@map("orders")
-}
-
-model OrderItem {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  orderId         String    @db.Uuid
-  menuItemId      String    @db.Uuid
-  
-  // Snapshot Data (frozen at order time)
-  itemName        String    @db.VarChar(200)
-  itemBasePrice   Decimal   @db.Decimal(10, 2)
-  
-  // Quantity with Unit
-  quantity        Decimal   @db.Decimal(10, 3)
-  quantityType    QuantityType
-  unit            String?   @db.VarChar(20)
-  
-  // Pricing
-  customizationTotal Decimal @default(0.00) @db.Decimal(10, 2)
-  itemSubtotal    Decimal   @db.Decimal(10, 2) // (basePrice + customizationTotal) * quantity
-  itemTaxAmount   Decimal   @default(0.00) @db.Decimal(10, 2)
-  itemTotal       Decimal   @db.Decimal(10, 2) // itemSubtotal + itemTaxAmount
-  
-  // Metadata
-  specialInstructions String? @db.Text
-  prepTime        Int?
-  
-  // Relations
-  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  menuItem        MenuItem  @relation(fields: [menuItemId], references: [id])
-  customizations  OrderItemCustomization[]
-  
-  createdAt       DateTime  @default(now())
-
-  @@index([orderId])
-  @@map("order_items")
-}
-
-model OrderItemCustomization {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  orderItemId     String    @db.Uuid
-  
-  // Snapshot data
-  customizationName String  @db.VarChar(100)
-  customizationType String  @db.VarChar(20) // 'SIZE', 'ADDON', etc.
-  customizationPrice Decimal @db.Decimal(10, 2)
-  
-  // For DAG customizations (NULL for simple customizations)
-  customizationNodeId String? @db.Uuid
-  
-  // Relations
-  orderItem       OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
-  customizationNode CustomizationNode? @relation(fields: [customizationNodeId], references: [id])
-  
-  createdAt       DateTime  @default(now())
-
-  @@index([orderItemId])
-  @@map("order_item_customizations")
-}
-
-model OrderTax {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  orderId         String    @db.Uuid
-  taxId           String    @db.Uuid
-  
-  // Snapshot data
-  taxName         String    @db.VarChar(100)
-  taxType         TaxType
-  taxValue        Decimal   @db.Decimal(10, 4)
-  calculatedAmount Decimal  @db.Decimal(10, 2)
-  
-  // Relations
-  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  tax             Tax       @relation(fields: [taxId], references: [id])
-  
-  createdAt       DateTime  @default(now())
-
-  @@index([orderId])
-  @@map("order_taxes")
-}
-
-model OrderStatusHistory {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  orderId         String    @db.Uuid
-  
-  status          OrderStatus
-  changedBy       String?   @db.VarChar(100) // 'system' or user identifier
-  notes           String?   @db.Text
-  
-  // Relations
-  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  
-  createdAt       DateTime  @default(now())
-
-  @@index([orderId])
-  @@index([createdAt(sort: Desc)])
-  @@map("order_status_history")
-}
-
-// ============================================================================
-// PAYMENT MANAGEMENT
-// ============================================================================
-
-model Payment {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  orderId         String    @unique @db.Uuid
-  
-  // Payment Info
-  amount          Decimal   @db.Decimal(10, 2)
-  status          PaymentStatus @default(PENDING)
-  paymentMethod   String    @db.VarChar(50) // 'MOCK', 'CARD', 'CASH', 'UPI'
-  
-  // Mock Payment Gateway Response
-  transactionId   String?   @unique @db.VarChar(100)
-  gatewayResponse Json?     // store full gateway response
-  
-  // Relations
-  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@index([status])
-  @@index([transactionId])
-  @@map("payments")
-}
-

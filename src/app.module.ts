@@ -4,6 +4,7 @@ import { PrismaModule } from './shared/database/prisma.module';
 import { RedisModule } from './shared/redis/redis.module';
 import { HealthModule } from './health/health.module';
 import { MenuModule } from './modules/menu/menu.module';
+import { CartModule } from './modules/cart/cart.module';
 
 @Module({
   imports: [
@@ -24,8 +25,8 @@ import { MenuModule } from './modules/menu/menu.module';
 
     // Feature Modules
     MenuModule,
+    CartModule,
 
-    // CartModule,
     // OrdersModule,
     // KitchenModule,
     // PaymentsModule,

@@ -12,6 +12,7 @@
     "prisma:studio": "prisma studio --config ./prisma.config.ts"
   },
   "dependencies": {
+    "@nestjs/cli": "^10.4.9",
     "@nestjs/common": "^10.0.0",
     "@nestjs/config": "^3.2.0",
     "@nestjs/core": "^10.0.0",
@@ -32,7 +33,6 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "@nestjs/cli": "^10.4.9",
     "@types/node": "^20.19.27",
     "@types/pg": "^8.16.0",
     "@types/uuid": "^10.0.0",

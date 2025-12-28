@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './shared/database/prisma.module';
 import { RedisModule } from './shared/redis/redis.module';
 import { HealthModule } from './health/health.module';
+import { MenuModule } from './modules/menu/menu.module';
 
 @Module({
   imports: [
@@ -21,8 +22,9 @@ import { HealthModule } from './health/health.module';
     // Health Check
     HealthModule,
 
-    // Feature Modules (will add later)
-    // MenuModule,
+    // Feature Modules
+    MenuModule,
+
     // CartModule,
     // OrdersModule,
     // KitchenModule,

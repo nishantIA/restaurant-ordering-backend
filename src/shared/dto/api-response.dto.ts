@@ -1,16 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-export class ApiResponseMetadata {
-  @ApiProperty({ example: '2024-12-28T10:30:00.000Z' })
-  timestamp: string;
-
-  @ApiProperty({ example: 'req_abc123xyz' })
-  requestId?: string;
-
-  @ApiProperty({ required: false })
-  pagination?: PaginationMetadata;
-}
-
+// Define PaginationMetadata FIRST (before it's used)
 export class PaginationMetadata {
   @ApiProperty({ example: 1 })
   page: number;
@@ -29,6 +19,18 @@ export class PaginationMetadata {
 
   @ApiProperty({ example: false })
   hasPrevious: boolean;
+}
+
+// Now ApiResponseMetadata can use PaginationMetadata
+export class ApiResponseMetadata {
+  @ApiProperty({ example: '2024-12-28T10:30:00.000Z' })
+  timestamp: string;
+
+  @ApiProperty({ example: 'req_abc123xyz' })
+  requestId?: string;
+
+  @ApiPropertyOptional({ type: () => PaginationMetadata })
+  pagination?: PaginationMetadata;
 }
 
 export class ApiSuccessResponse<T> {

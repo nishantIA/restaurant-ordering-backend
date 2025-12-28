@@ -3,6 +3,7 @@ import { OrdersRepository } from './orders.repository';
 import { CartRepository } from '../cart/cart.repository';
 import { MenuRepository } from '../menu/menu.repository';
 import { UsersService } from '../users/users.service';
+import { WebSocketService } from '../websocket/websocket.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { RedisService } from '../../shared/redis/redis.service';
 import { generateOrderNumber } from '../../shared/utils/order-number-generator';
@@ -17,6 +18,7 @@ export class OrdersService {
     private readonly menuRepository: MenuRepository,
     private readonly usersService: UsersService,
     private readonly redis: RedisService,
+    private readonly webSocketService: WebSocketService,
   ) {}
 
   /**
@@ -36,8 +38,9 @@ export class OrdersService {
 
     // 3. Find or create user (if phone/email provided)
     let userId: string | undefined;
+    let user: any;
     if (dto.phone || dto.email) {
-      const user = await this.usersService.findOrCreateUser({
+      user = await this.usersService.findOrCreateUser({
         phone: dto.phone,
         email: dto.email,
         name: dto.name,
@@ -80,6 +83,24 @@ export class OrdersService {
     await this.cartRepository.deleteCart(sessionId);
 
     this.logger.log(`Order ${orderNumber} created successfully`);
+
+    // 10. Emit WebSocket event to kitchen
+    this.webSocketService.notifyNewOrder({
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      items: orderItems.map(item => ({
+        name: item.itemName,
+        quantity: Number(item.quantity),
+        customizations: item.customizations?.create || [],
+      })),
+      totalAmount,
+      estimatedPrepTime,
+      user: user ? {
+        phone: user.phone,
+        name: user.name,
+      } : undefined,
+      timestamp: new Date().toISOString(),
+    });
 
     return this.transformOrder(order);
   }

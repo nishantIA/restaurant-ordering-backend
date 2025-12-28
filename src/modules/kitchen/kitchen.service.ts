@@ -1,13 +1,17 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { KitchenRepository } from './kitchen.repository';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { WebSocketService } from '../websocket/websocket.service';
 import { OrderStatus } from '@prisma/client';
 
 @Injectable()
 export class KitchenService {
   private readonly logger = new Logger(KitchenService.name);
 
-  constructor(private readonly repository: KitchenRepository) {}
+  constructor(
+    private readonly repository: KitchenRepository,
+    private readonly webSocketService: WebSocketService,
+  ) {}
 
   /**
    * Get all orders or filter by status
@@ -50,8 +54,10 @@ export class KitchenService {
       throw new NotFoundException(`Order with ID '${id}' not found`);
     }
 
+    const previousStatus = currentOrder.status;
+
     // Validate status transition
-    this.validateStatusTransition(currentOrder.status, dto.status);
+    this.validateStatusTransition(previousStatus, dto.status);
 
     // Update status
     const updatedOrder = await this.repository.updateStatus(
@@ -62,8 +68,25 @@ export class KitchenService {
     );
 
     this.logger.log(
-      `Order ${updatedOrder.orderNumber} status updated: ${currentOrder.status} → ${dto.status}`,
+      `Order ${updatedOrder.orderNumber} status updated: ${previousStatus} → ${dto.status}`,
     );
+
+    // Emit WebSocket events
+    const statusPayload = {
+      orderId: updatedOrder.id,
+      orderNumber: updatedOrder.orderNumber,
+      status: dto.status,
+      previousStatus,
+      changedBy: dto.changedBy,
+      notes: dto.notes,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Notify customer
+    this.webSocketService.notifyOrderStatusUpdate(statusPayload);
+
+    // Notify kitchen
+    this.webSocketService.notifyOrderUpdate(statusPayload);
 
     return this.transformOrder(updatedOrder);
   }

@@ -7,6 +7,9 @@ import { MenuModule } from './modules/menu/menu.module';
 import { CartModule } from './modules/cart/cart.module';
 import { UsersModule } from './modules/users/users.module';
 import { OrdersModule } from './modules/orders/orders.module';
+import { KitchenModule } from './modules/kitchen/kitchen.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+
 
 @Module({
   imports: [
@@ -30,10 +33,8 @@ import { OrdersModule } from './modules/orders/orders.module';
     CartModule,
     UsersModule,
     OrdersModule,
-
-    // OrdersModule,
-    // KitchenModule,
-    // PaymentsModule,
+    KitchenModule,
+    PaymentsModule,
   ],
   controllers: [],
   providers: [],

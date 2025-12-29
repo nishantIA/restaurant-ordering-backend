@@ -4,8 +4,8 @@
   "main": "index.js",
   "scripts": {
     "build": "prisma generate --config ./prisma.config.ts && nest build",
-    "start": "prisma migrate deploy --config ./prisma.config.ts && node dist/main",
-    "start:prod": "node dist/main",
+    "start": "prisma migrate deploy --config ./prisma.config.ts && node dist/src/main",
+    "start:prod": "node dist/src/main",
     "dev": "nest start --watch",
     "prisma:generate": "prisma generate --config ./prisma.config.ts",
     "prisma:migrate": "prisma migrate dev --config ./prisma.config.ts",

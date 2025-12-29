@@ -260,36 +260,75 @@ export class MenuRepository {
   /**
    * Build DAG tree from flat customization nodes
    */
-  buildCustomizationTree(nodes: any[]): any[] {
-    if (!nodes || nodes.length === 0) return [];
+/**
+ * Build DAG tree from flat customization nodes (with cycle detection)
+ */
+buildCustomizationTree(nodes: any[]): any[] {
+  if (!nodes || nodes.length === 0) return [];
 
-    // Find root nodes (nodes with no parent edges)
-    const rootNodes = nodes.filter(
-      (node) => !node.parentEdges || node.parentEdges.length === 0,
-    );
+  // Find root nodes (nodes with no parent edges)
+  const rootNodes = nodes.filter(
+    (node) => !node.parentEdges || node.parentEdges.length === 0,
+  );
 
-    const buildNode = (node: any): any => {
-      const children =
-        node.childEdges?.map((edge: any) => {
+  // Track visited nodes to prevent infinite recursion
+  const visited = new Set<string>();
+
+  const buildNode = (node: any, ancestors: Set<string> = new Set()): any => {
+    // NULL CHECK: If node doesn't exist, return null
+    if (!node) {
+      return null;
+    }
+
+    // CYCLE DETECTION: If we've already visited this node in current path
+    if (ancestors.has(node.id)) {
+      return null;
+    }
+
+    // Add current node to ancestor path
+    const currentAncestors = new Set(ancestors);
+    currentAncestors.add(node.id);
+
+    // Mark as visited globally
+    visited.add(node.id);
+
+    // Build children recursively
+    const children =
+      node.childEdges
+        ?.map((edge: any) => {
           const childNode = nodes.find((n) => n.id === edge.childNodeId);
+          
+          // Skip if child not found or already in ancestor path
+          if (!childNode || currentAncestors.has(childNode.id)) {
+            return null;
+          }
+
+          const builtChild = buildNode(childNode, currentAncestors);
+          
+          // Skip if child build failed
+          if (!builtChild) {
+            return null;
+          }
+
           return {
-            ...buildNode(childNode),
+            ...builtChild,
             constraints: edge.constraints,
           };
-        }) || [];
+        })
+        .filter(Boolean) || []; // Filter out null values
 
-      return {
-        id: node.id,
-        type: node.type,
-        name: node.name,
-        description: node.description,
-        price: node.price,
-        displayOrder: node.displayOrder,
-        data: node.data,
-        ...(children.length > 0 && { children }),
-      };
+    return {
+      id: node.id,
+      type: node.type,
+      name: node.name,
+      description: node.description,
+      price: node.price,
+      displayOrder: node.displayOrder,
+      data: node.data,
+      ...(children.length > 0 && { children }),
     };
+  };
 
-    return rootNodes.map(buildNode);
-  }
+  return rootNodes.map((node) => buildNode(node)).filter(Boolean);
+}
 }
